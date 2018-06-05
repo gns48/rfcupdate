@@ -1,0 +1,143 @@
+#! /usr/bin/env python
+
+import sys
+import os
+import argparse
+import re
+import ftplib
+from subprocess import call
+
+INDEX_LIST = ['rfc-index.txt',
+	      'bcp-index.txt',
+              'fyi-index.txt',
+              'rfc-index-latest.txt',
+#              'rfc-index.xml',
+              'rfc-ref.txt.new',
+              'rfcxx00.txt',
+              'std-index.txt'];
+
+RFCNUMLEN = 4
+
+def function_name():
+    return sys._getframe().f_back.f_code.co_name
+
+def getRFConDisk(rfcdir):
+	allnums = []
+	fmask = re.compile('rfc\d{4}')
+	for root, subFolders, files in os.walk(rfcdir):
+		for filename in filter(fmask.match, files):
+			allnums.append(re.search('rfc(\d{4})', filename).group(1))
+	return sorted(allnums)
+
+def getRFCinIndex(rfcindex):
+	fmask = re.compile('^\d{4}')
+	allnums = [re.search('^(\d{4})', line).group(1) for line in filter(fmask.match, open(rfcindex))]
+	return sorted(allnums)
+
+def retString(n):
+	nstr = str(n)
+	if(len(nstr) < RFCNUMLEN):
+		nstr = '0' * (RFCNUMLEN - len(nstr)) + nstr
+	return nstr
+
+def get_absent(args):
+	absentlist = []
+	RFConDisk =  getRFConDisk(args.rfcdir)
+	RFCinIndex = getRFCinIndex(os.path.join(args.rfcdir, 'rfc-index.txt'))
+	if len(RFConDisk) > 0:
+		maxIndex = max(int(RFConDisk[-1]), int(RFCinIndex[-1]))
+	else:
+		maxIndex = int(RFCinIndex[-1])
+	for i in range(1, maxIndex):
+		outstr = ''
+		istr = retString(i)
+		if istr in RFConDisk:
+			if istr in RFCinIndex: continue # we already have an indexed file, skip it
+			else: outstr = '?' * 3 # strange, file is not present in index but exists on disk
+		else:
+			if istr in RFCinIndex: outstr = 'ftp' # possibly new file, try to upload
+			else: outstr = '\x20' * 3 # still not issued
+		absentlist.append(outstr + '\x20' + istr)
+	return absentlist
+
+def print_absent(args):
+	for s in get_absent(args): print(s)
+
+def ftp_retrive(ftpconn, fname, localpath):
+	lfd = open(os.path.join(localpath, fname), "wb")
+	ftpconn.retrbinary("RETR " + fname, lfd.write, 64*1024)
+	lfd.close()
+
+def retriveAndStore(ftpconn, number, rfcdir):
+	dirname = os.path.join(rfcdir, 'rfc' + number[:-2] + '00')
+	if not os.path.exists(dirname):
+		print "Creating " + dirname
+		os.makedirs(dirname)
+	for ext in ['.txt', '.ps', '.pdf']:
+		# skip leading zeros
+		fname = 'rfc' + str(int(number)) + ext
+		fullname = os.path.join(dirname, 'rfc' + number + ext)
+		try:
+			remoteSize = ftpconn.size(fname)
+			ftp_retrive(ftpconn, fname, rfcdir)
+		except ftplib.error_perm: # no such file at remote FTP storage
+			continue
+		print "%s(%d) -> %s.gz" % (fname, remoteSize, fullname)
+		os.rename(fname, fullname)
+		call(["gzip", fullname])
+
+def update_rfc(args):
+	# setup ftp connection
+	ftpconn = ftplib.FTP(args.server, args.user, args.password)
+	ftpconn.cwd(args.dir)
+	# define sizes for existing files
+	isize = {}
+	for fn in INDEX_LIST:
+		if os.path.isfile(fn): 
+			statinfo = os.stat(os.path.join(args.rfcdir, fn))
+			isize[fn] = statinfo.st_size
+		else:
+			isize[fn] = 0
+		ftpsize = ftpconn.size(fn)
+		if ftpsize != isize[fn]:
+			print "%s: %d -> %d" % (fn, isize[fn], ftpsize)
+			ftp_retrive(ftpconn, fn, args.rfcdir)
+		else:
+			print fn + ": not needed"
+	#check for new files
+	ftpmask = re.compile('ftp (\d{4})')
+	for num2ftp in filter(ftpmask.match, get_absent(args)):
+		number = re.search('ftp (\d{4})', num2ftp).group(1)
+		retriveAndStore(ftpconn, number, args.rfcdir)
+	ftpconn.quit()
+	
+parser = argparse.ArgumentParser(prog='update-rfc')
+parser.add_argument('--rfcdir', '-r',   nargs='?', default=".",                  help='set local RFC hierarchy root')
+parser.add_argument('--server', '-s',   nargs='?', default="ftp.rfc-editor.org", help='set FTP server name')
+parser.add_argument('--user', '-u',     nargs='?', default="ftp",                help='set FTP user name')
+parser.add_argument('--password', '-p', nargs='?', default="ftp",                help='set FTP password')
+parser.add_argument('--dir', '-d',      nargs='?', default="in-notes",           help='set FTP directory')
+parser.add_argument('--log', '-l',      nargs='?', default="update-report.log",  help='logfile name (will be appended if exists)')
+parser.add_argument('--version', '-v',  action='store_true', help='print version number and exit')
+parser.add_argument('command', choices=['absent', 'update'], default='update', nargs='?',
+					help='Update local RFC collection or print the absent RFC numbers')
+args = parser.parse_args()
+
+dispatch_table = {
+	'absent': print_absent,
+	'update': update_rfc
+}
+
+if(args.version):
+	EMAIL='gleb.semenov@gmail.com'
+	AUTHOR='Gleb N. Semenov'
+	VNUM='2.1'
+	YEARS='2015'
+	print "%s v%s (c) %s %s, %s" % (parser.prog, VNUM, YEARS, AUTHOR, EMAIL)
+	sys.exit(0)
+
+dispatch_table[args.command](args)
+	
+
+
+
