@@ -48,7 +48,7 @@ def get_absent(args):
 		maxIndex = max(int(RFConDisk[-1]), int(RFCinIndex[-1]))
 	else:
 		maxIndex = int(RFCinIndex[-1])
-	for i in range(1, maxIndex):
+	for i in range(1, maxIndex+1):
 		outstr = ''
 		istr = retString(i)
 		if istr in RFConDisk:
@@ -90,6 +90,7 @@ def update_rfc(args):
 	# setup ftp connection
 	ftpconn = ftplib.FTP(args.server, args.user, args.password)
 	ftpconn.cwd(args.dir)
+	ftpconn.set_pasv(True)
 	# define sizes for existing files
 	isize = {}
 	for fn in INDEX_LIST:
@@ -113,7 +114,7 @@ def update_rfc(args):
 	
 parser = argparse.ArgumentParser(prog='update-rfc')
 parser.add_argument('--rfcdir', '-r',   nargs='?', default=".",                  help='set local RFC hierarchy root')
-parser.add_argument('--server', '-s',   nargs='?', default="ftp.rfc-editor.org", help='set FTP server name')
+parser.add_argument('--server', '-s',   nargs='?', default="www.rfc-editor.org", help='set FTP server name')
 parser.add_argument('--user', '-u',     nargs='?', default="ftp",                help='set FTP user name')
 parser.add_argument('--password', '-p', nargs='?', default="ftp",                help='set FTP password')
 parser.add_argument('--dir', '-d',      nargs='?', default="in-notes",           help='set FTP directory')
