@@ -44,8 +44,9 @@ class CFtpGetter(object):
         lfd = open(fname, "wb")
 
         def cback(block):
+            """local lfd.write wrapper to draw block read indicator"""
             lfd.write(block)
-            print('.', end = '')
+            print('.', end='')
 
         self.ftpc.retrbinary("RETR " + remote_name, cback)
         lfd.close()
@@ -59,7 +60,7 @@ class CFtpGetter(object):
                 remote_size = self.get_remote_size(remote_name)
                 if remote_size is None:
                     continue # file does not exist
-                print("{}({}) -> {}".format(remote_name, remote_size, local_name), end = '')
+                print("{}({}) -> {}".format(remote_name, remote_size, local_name), end='')
                 self.get_file(rfc_root, remote_name, local_name)
                 print('')
             except ftplib.error_perm:
@@ -163,7 +164,7 @@ class CRfcReference(object):
         self.nums_present.sort()
 
     def num_present(self, num):
-        """true if the rfc number is present in reference"""
+        """true if the rfc number is present in index"""
         return num in self.nums_present
 
     def getlist(self):
@@ -228,7 +229,7 @@ def update_rfc(arg):
         if remote_size != local_size:
             print("{}({}) -> {}({})".format(index_file, remote_size,
                                             index_file, local_size),
-                  end = '')
+                  end='')
             ftpc.get_file(arg.rfcdir, index_file)
             print('')
         else:
@@ -237,10 +238,11 @@ def update_rfc(arg):
     rfc_index = CRfcIndex("rfc-index.txt", arg.rfcdir)
     rfc_reference = CRfcReference("rfc-ref.txt", arg.rfcdir)
     rfc_directory = CRfcDirectory(arg.rfcdir)
-    
+
     for num in rfc_reference.getlist():
-        if not rfc_index.num_present(num): rfc_index.append(num)
-    
+        if not rfc_index.num_present(num):
+            rfc_index.append(num)
+
     difference = list(set(rfc_index.getlist()) - set(rfc_directory.getlist()))
 
     if difference:
