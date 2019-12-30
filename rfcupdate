@@ -144,6 +144,36 @@ class CRfcIndex(object):
         """true if the RFC num was never issued"""
         return num in self.not_issued
 
+    def append(self, num):
+        """append element to list"""
+        self.nums_present.append(num)
+        self.nums_present.sort()
+
+class CRfcReference(object):
+    """RFC reference parser"""
+    def __init__(self, rfc_reference, rfc_root=None):
+        self.rfc_root = rfc_root or "."
+        self.reference_file = os.path.join(self.rfc_root, rfc_reference)
+        rex = r'^RFC(\d{4})'
+        rex_mask = re.compile(rex)
+
+        self.nums_present = [re.search(rex, line).group(1)
+                             for line in filter(rex_mask.match,
+                                                open(self.reference_file))]
+        self.nums_present.sort()
+
+    def num_present(self, num):
+        """true if the rfc number is present in reference"""
+        return num in self.nums_present
+
+    def getmax(self):
+        """return maximum number of RFC present in reference"""
+        return int(self.nums_present[-1])
+
+    def getlist(self):
+        """return RFC reference list"""
+        return self.nums_present
+
 def toss_received(arg, r_idx=None, r_dir=None):
     """move just stored files to proper directories"""
     rfcidx = r_idx or CRfcIndex("rfc-index.txt", arg.rfcdir)
@@ -201,7 +231,7 @@ def update_rfc(arg):
         remote_size = ftpc.get_remote_size(index_file)
         if remote_size != local_size:
             print("{}({}) -> {}({})".format(index_file, remote_size,
-                                            index_file,  local_size),
+                                            index_file, local_size),
                   end = '')
             ftpc.get_file(arg.rfcdir, index_file)
             print('')
@@ -209,7 +239,12 @@ def update_rfc(arg):
             print("{}: not needed".format(index_file))
 
     rfc_index = CRfcIndex("rfc-index.txt", arg.rfcdir)
+    rfc_reference = CRfcReference("rfc-ref.txt", arg.rfcdir)
     rfc_directory = CRfcDirectory(arg.rfcdir)
+    
+    for num in rfc_reference.getlist():
+        if not rfc_index.num_present(num): rfc_index.append(num)
+    
     difference = list(set(rfc_index.getlist()) - set(rfc_directory.getlist()))
 
     if difference:
