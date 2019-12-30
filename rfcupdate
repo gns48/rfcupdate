@@ -148,6 +148,9 @@ class CRfcIndex(object):
     def append(self, num):
         """append element to list"""
         self.nums_present.append(num)
+
+    def sort(self):
+        """Sort index"""
         self.nums_present.sort()
 
 class CRfcReference(object):
@@ -171,10 +174,23 @@ class CRfcReference(object):
         """return RFC reference list"""
         return self.nums_present
 
+    def getmax(self):
+        """return maximum number of RFC present in index"""
+        return int(self.nums_present[-1])
+
+
 def toss_received(arg, r_idx=None, r_dir=None):
     """move just stored files to proper directories"""
     rfcidx = r_idx or CRfcIndex("rfc-index.txt", arg.rfcdir)
     rfcdir = r_dir or CRfcDirectory(arg.rfcdir)
+    if r_idx is None:
+        rfcref = CRfcReference("rfc-ref.txt", arg.rfcdir)
+        for num in rfcref.getlist():
+            if not rfcidx.num_present(num):
+                rfcidx.append(num)
+        rfcidx.sort()
+        del rfcref
+
     for i in range(1, rfcidx.getmax()+1):
         rfcdir.store_file("%04d" % i)
     if r_idx is None:
@@ -182,28 +198,41 @@ def toss_received(arg, r_idx=None, r_dir=None):
     if r_dir is None:
         del rfcidx
 
-def print_absent(arg, r_idx=None, r_dir=None):
+def print_absent(arg):
     """print list if absent RFC numbers"""
-    rfcidx = r_idx or CRfcIndex("rfc-index.txt", arg.rfcdir)
-    rfcdir = r_dir or CRfcDirectory(arg.rfcdir)
-    maxnum = max(rfcidx.getmax(), rfcdir.getmax())
-    for i in range(1, maxnum+1):
+    rfcidx = CRfcIndex("rfc-index.txt", arg.rfcdir)
+    rfcref = CRfcReference("rfc-ref.txt", arg.rfcdir)
+    rfcdir = CRfcDirectory(arg.rfcdir)
+    maxnum = max(rfcidx.getmax(), rfcdir.getmax(), rfcref.getmax())
+    for i in range(1, maxnum + 1):
         istr = "%04d" % i
+
         idx_present = rfcidx.num_present(istr)
         dir_present = rfcdir.num_present(istr)
-        if idx_present & dir_present:
+        ref_present = rfcref.num_present(istr)
+
+        if rfcidx.num_notissued(istr):
+            print("n/i {}".format(istr))
             continue
-        elif idx_present:
+
+        if dir_present:
+            if idx_present and ref_present:
+                continue
+            elif idx_present:
+                fmt = "r?? {}"
+            elif ref_present:
+                fmt = "i?? {}"
+            else:
+                fmt = "??? {}"
+        elif idx_present or ref_present:
             fmt = "ftp {}"
-        elif dir_present:
-            fmt = "??? {}"
         else:
             fmt = "    {}"
         print(fmt.format(istr))
-    if r_idx is None:
-        del rfcdir
-    if r_dir is None:
-        del rfcidx
+
+    del rfcdir
+    del rfcidx
+    del rfcref
 
 def create_notissued(rfcroot, num):
     """create file of never issued RFC and write this note into it"""
@@ -242,6 +271,7 @@ def update_rfc(arg):
     for num in rfc_reference.getlist():
         if not rfc_index.num_present(num):
             rfc_index.append(num)
+    rfc_index.sort()
 
     difference = list(set(rfc_index.getlist()) - set(rfc_directory.getlist()))
 
