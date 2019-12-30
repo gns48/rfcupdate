@@ -166,10 +166,6 @@ class CRfcReference(object):
         """true if the rfc number is present in reference"""
         return num in self.nums_present
 
-    def getmax(self):
-        """return maximum number of RFC present in reference"""
-        return int(self.nums_present[-1])
-
     def getlist(self):
         """return RFC reference list"""
         return self.nums_present
@@ -255,6 +251,7 @@ def update_rfc(arg):
                 ftpc.get_rfcset(arg.rfcdir, num)
         toss_received(arg, rfc_index, rfc_directory)
     del rfc_directory
+    del rfc_reference
     del rfc_index
     del ftpc
 
