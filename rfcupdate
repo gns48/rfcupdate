@@ -16,7 +16,6 @@ INDEX_LIST = ['rfc-index.txt',
               'fyi-index.txt',
               'rfc-index-latest.txt',
               'rfc-ref.txt',
-              'rfcxx00.txt',
               'std-index.txt']
 
 EXT_LIST = ['.txt', '.pdf']
@@ -212,7 +211,7 @@ def print_absent(arg):
         ref_present = rfcref.num_present(istr)
 
         if rfcidx.num_notissued(istr):
-            print("n/i {}".format(istr))
+#            print("n/i {}".format(istr))
             continue
 
         if dir_present:
@@ -249,7 +248,7 @@ def update_rfc(arg):
 
     # update index list
     for index_file in INDEX_LIST:
-        if os.path.isfile(index_file):
+        if os.path.exists(index_file):
             statinfo = os.stat(os.path.join(arg.rfcdir, index_file))
             local_size = statinfo.st_size
         else:
@@ -262,7 +261,7 @@ def update_rfc(arg):
             ftpc.get_file(arg.rfcdir, index_file)
             print('')
         else:
-            print("{}: not needed".format(index_file))
+            print("{}: up to date".format(index_file))
 
     rfc_index = CRfcIndex("rfc-index.txt", arg.rfcdir)
     rfc_reference = CRfcReference("rfc-ref.txt", arg.rfcdir)
