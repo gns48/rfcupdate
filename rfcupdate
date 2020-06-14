@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """rfcupdate -- update local RFC tree from online database"""
 
-__author__ = "Gleb N. Semenov"
-__copyright__ = "(c) 2015-2020"
-__version__ = "3.0.1"
+__author__ = 'Gleb N. Semenov'
+__copyright__ = '(c) 2015-2020'
+__version__ = '3.0.1'
 
 import os
 import argparse
@@ -22,13 +22,18 @@ EXT_LIST = ['txt', 'pdf']
 
 RFCDIG=4
 
+def num2string(num):
+    return '%0{}d'.format(RFCDIG) % num
+
+def num2rfc(num, ext=None):
+    if ext is None:
+        return 'rfc%0{}d'.format(RFCDIG) % num
+    else:
+        return 'rfc%0{}d.{}'.format(RFCDIG, ext) % num
+
 class CFtpGetter(object):
     """FTP getter"""
-    def __init__(self, ftpdir=None, server=None, user=None, password=None):
-        self.ftpdir = ftpdir or "in-notes"
-        self.server = server or "www.rfc-editor.org"
-        self.user = user or "ftp"
-        self.password = password or "ftp"
+    def __init__(self, ftpdir, server, user, password):
         self.ftpc = ftplib.FTP(server, user, password)
         self.ftpc.cwd(ftpdir)
 
@@ -42,26 +47,26 @@ class CFtpGetter(object):
             fname = os.path.join(rfc_root, remote_name)
         else:
             fname = os.path.join(rfc_root, local_name)
-        lfd = open(fname, "wb")
+        lfd = open(fname, 'wb')
 
-        def cback(block):
+        def printdot_callback(block):
             """local lfd.write wrapper to draw block read indicator"""
             lfd.write(block)
             print('.', end='')
 
-        self.ftpc.retrbinary("RETR " + remote_name, cback)
+        self.ftpc.retrbinary('RETR ' + remote_name, printdot_callback)
         lfd.close()
 
     def get_rfcset(self, rfc_root, number):
         """retrive rfcNNNN.*"""
         for ext in EXT_LIST:
-            remote_name = "rfc{}.{}".format(int(number), ext)
-            local_name = "rfc{}.{}".format(number, ext)
+            remote_name = 'rfc{}.{}'.format(number, ext)
+            local_name = num2rfc(number, ext)
             try:
                 remote_size = self.get_remote_size(remote_name)
                 if remote_size is None:
                     continue # file does not exist
-                print("{}({}) -> {}".format(remote_name, remote_size, local_name), end='')
+                print('{}({}) -> {}'.format(remote_name, remote_size, local_name), end='')
                 self.get_file(rfc_root, remote_name, local_name)
                 print('')
             except ftplib.error_perm:
@@ -73,14 +78,14 @@ class CFtpGetter(object):
 
 class CRfcDirectory(object):
     """RFC directory parser, and file manipulator"""
-    def __init__(self, rfc_root=None):
-        self.rfc_root = rfc_root or "."
+    def __init__(self, rfc_root):
+        self.rfc_root = rfc_root
         self.num_ondisk = []
         regex = rf'rfc(\d{{{RFCDIG}}})'
         fmask = re.compile(regex)
         for _, _, files in os.walk(rfc_root):
             for filename in filter(fmask.match, files):
-                self.num_ondisk.append(re.search(regex, filename).group(1))
+                self.num_ondisk.append(int(re.search(regex, filename).group(1)))
         self.num_ondisk.sort()
 
     def num_present(self, num):
@@ -89,22 +94,22 @@ class CRfcDirectory(object):
 
     def getmax(self):
         """return maximum number of RFC present on disk"""
-        return int(self.num_ondisk[-1])
+        return self.num_ondisk[-1]
 
-    def store_file(self, inum):
+    def store_file(self, num):
         """store file from RFC root fir to the proper subdirectory"""
-        dirname = os.path.join(self.rfc_root, "rfc%0{}d".format(RFCDIG) % (inum - inum % 100))
+        dirname = os.path.join(self.rfc_root, num2rfc(num - num % 100))
         if not os.path.exists(dirname):
-            print("Creating " + dirname)
+            print('Creating {}'.format(dirname))
             os.makedirs(dirname)
         for ext in EXT_LIST:
-            rfc_name = "rfc%0{}d.{}".format(RFCDIG, ext) % inum
+            rfc_name = num2rfc(num, ext)
             stored_name = os.path.join(dirname, rfc_name)
             received_name = os.path.join(self.rfc_root, rfc_name)
             if os.path.isfile(received_name):
                 os.rename(received_name, stored_name)
-                call(["gzip", stored_name])
-                print("{} -> {}.gz".format(received_name, stored_name))
+                call(['gzip', stored_name])
+                print('{} -> {}.gz'.format(received_name, stored_name))
 
     def getlist(self):
         """return list of rfc numbers present on disk"""
@@ -112,19 +117,18 @@ class CRfcDirectory(object):
 
 class CRfcIndex(object):
     """RFC index parser"""
-    def __init__(self, rfc_index, rfc_root=None):
-        self.rfc_root = rfc_root or "."
-        self.index_file = os.path.join(self.rfc_root, rfc_index)
+    def __init__(self, rfc_index, rfc_root):
+        self.index_file = os.path.join(rfc_root, rfc_index)
         rex = rf'^(\d{{{RFCDIG}}})'
         rex_notissued = rf'^(\d{{{RFCDIG}}}) Not Issued.'
         rex_mask = re.compile(rex)
         rex_notissued_mask = re.compile(rex_notissued)
 
-        self.nums_present = [re.search(rex, line).group(1)
+        self.nums_present = [int(re.search(rex, line).group(1))
                              for line in filter(rex_mask.match,
                                                 open(self.index_file))]
 
-        self.not_issued = [re.search(rex_notissued, line).group(1)
+        self.not_issued = [int(re.search(rex_notissued, line).group(1))
                            for line in filter(rex_notissued_mask.match,
                                               open(self.index_file))]
         self.nums_present.sort()
@@ -136,7 +140,7 @@ class CRfcIndex(object):
 
     def getmax(self):
         """return maximum number of RFC present in index"""
-        return int(self.nums_present[-1])
+        return self.nums_present[-1]
 
     def getlist(self):
         """return RFC index list"""
@@ -156,13 +160,13 @@ class CRfcIndex(object):
 
 class CRfcReference(object):
     """RFC reference parser"""
-    def __init__(self, rfc_reference, rfc_root=None):
-        self.rfc_root = rfc_root or "."
-        self.reference_file = os.path.join(self.rfc_root, rfc_reference)
+    def __init__(self, rfc_reference, rfc_root):
+        self.rfc_root = rfc_root
+        self.reference_file = os.path.join(rfc_root, rfc_reference)
         rex = rf'^RFC(\d{{{RFCDIG}}})'
         rex_mask = re.compile(rex)
 
-        self.nums_present = [re.search(rex, line).group(1)
+        self.nums_present = [int(re.search(rex, line).group(1))
                              for line in filter(rex_mask.match,
                                                 open(self.reference_file))]
         self.nums_present.sort()
@@ -177,14 +181,14 @@ class CRfcReference(object):
 
     def getmax(self):
         """return maximum number of RFC present in index"""
-        return int(self.nums_present[-1])
+        return self.nums_present[-1]
 
 def toss_received(arg, r_idx=None, r_dir=None):
     """move just stored files to the proper directories"""
-    rfcidx = r_idx or CRfcIndex("rfc-index.txt", arg.rfcdir)
+    rfcidx = r_idx or CRfcIndex('rfc-index.txt', arg.rfcdir)
     rfcdir = r_dir or CRfcDirectory(arg.rfcdir)
     if r_idx is None:
-        rfcref = CRfcReference("rfc-ref.txt", arg.rfcdir)
+        rfcref = CRfcReference('rfc-ref.txt', arg.rfcdir)
         for num in rfcref.getlist():
             if not rfcidx.num_present(num):
                 rfcidx.append(num)
@@ -200,34 +204,32 @@ def toss_received(arg, r_idx=None, r_dir=None):
 
 def print_absent(arg):
     """print list of absent RFC numbers"""
-    rfcidx = CRfcIndex("rfc-index.txt", arg.rfcdir)
-    rfcref = CRfcReference("rfc-ref.txt", arg.rfcdir)
+    rfcidx = CRfcIndex('rfc-index.txt', arg.rfcdir)
+    rfcref = CRfcReference('rfc-ref.txt', arg.rfcdir)
     rfcdir = CRfcDirectory(arg.rfcdir)
     maxnum = max(rfcidx.getmax(), rfcdir.getmax(), rfcref.getmax())
     for i in range(1, maxnum + 1):
-        istr = "%0{}d".format(RFCDIG) % i
+        idx_present = rfcidx.num_present(i)
+        dir_present = rfcdir.num_present(i)
+        ref_present = rfcref.num_present(i)
 
-        idx_present = rfcidx.num_present(istr)
-        dir_present = rfcdir.num_present(istr)
-        ref_present = rfcref.num_present(istr)
-
-        if rfcidx.num_notissued(istr):
+        if rfcidx.num_notissued(i):
             continue
 
         if dir_present:
             if idx_present and ref_present:
                 continue
             elif idx_present:
-                fmt = "r?? {}"
+                fmt = 'r?? {}'
             elif ref_present:
-                fmt = "i?? {}"
+                fmt = 'i?? {}'
             else:
-                fmt = "??? {}"
+                fmt = '??? {}'
         elif idx_present or ref_present:
-            fmt = "ftp {}"
+            fmt = 'ftp {}'
         else:
-            fmt = "    {}"
-        print(fmt.format(istr))
+            fmt = '    {}'
+        print(fmt.format(num2string(i)))
 
     del rfcdir
     del rfcidx
@@ -235,10 +237,10 @@ def print_absent(arg):
 
 def create_notissued(rfcroot, num):
     """create file for never issued RFC, and write the 'never issued' note into it"""
-    fname = os.path.join(rfcroot, "rfc{}.txt".format(num))
-    text = "RFC {} was never issued.".format(num)
-    lfd = open(fname, "w")
-    lfd.write("{}\n".format(text))
+    strnum = num2string(num)
+    fname = os.path.join(rfcroot, 'rfc{}.txt'.format(strnum))
+    lfd = open(fname, 'w')
+    lfd.write('RFC {} was never issued.\n'.format(strnum))
     lfd.close()
     print(text)
 
@@ -255,16 +257,14 @@ def update_rfc(arg):
             local_size = 0
         remote_size = ftpc.get_remote_size(index_file)
         if remote_size != local_size:
-            print("{}({}) -> {}({})".format(index_file, remote_size,
-                                            index_file, local_size),
-                  end='')
+            print('{}({} -> {})'.format(index_file, remote_size, local_size), end='')
             ftpc.get_file(arg.rfcdir, index_file)
             print('')
         else:
-            print("{}: not needed".format(index_file))
+            print('{}: not needed'.format(index_file))
 
-    rfc_index = CRfcIndex("rfc-index.txt", arg.rfcdir)
-    rfc_reference = CRfcReference("rfc-ref.txt", arg.rfcdir)
+    rfc_index = CRfcIndex('rfc-index.txt', arg.rfcdir)
+    rfc_reference = CRfcReference('rfc-ref.txt', arg.rfcdir)
     rfc_directory = CRfcDirectory(arg.rfcdir)
 
     for num in rfc_reference.getlist():
@@ -286,14 +286,14 @@ def update_rfc(arg):
     del rfc_index
     del ftpc
 
-PARSER = argparse.ArgumentParser(prog='rfcupdate', description="RFC collection updater",
+PARSER = argparse.ArgumentParser(prog='rfcupdate', description='RFC collection updater',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 PARSER.add_argument('-v', '--version', action='store_true', help='print version number and exit')
-PARSER.add_argument('-r', '--rfcdir', default=".", help='set local RFC hierarchy root')
-PARSER.add_argument('-s', '--server', default="www.rfc-editor.org", help='set FTP server name')
-PARSER.add_argument('-u', '--user', default="ftp", help='set FTP user name')
-PARSER.add_argument('-p', '--password', default="ftp", help='set FTP password')
-PARSER.add_argument('-d', '--dir', default="in-notes", help='set FTP directory')
+PARSER.add_argument('-r', '--rfcdir', default='.', help='set local RFC hierarchy root')
+PARSER.add_argument('-s', '--server', default='www.rfc-editor.org', help='set FTP server name')
+PARSER.add_argument('-u', '--user', default='ftp', help='set FTP user name')
+PARSER.add_argument('-p', '--password', default='ftp', help='set FTP password')
+PARSER.add_argument('-d', '--dir', default='in-notes', help='set FTP directory')
 PARSER.add_argument('-g', '--rfcdig', type=int, default=RFCDIG, help='count of digits in RFC number')
 PARSER.add_argument('command', choices=['absent', 'update', 'toss'],
                     nargs='?', default='update',
@@ -307,7 +307,7 @@ DISPATCH_TABLE = {
 }
 
 if ARGS.version:
-    print("{} v{} {}, {}".format(PARSER.prog, __version__, __copyright__, __author__))
+    print('{} v{} {}, {}'.format(PARSER.prog, __version__, __copyright__, __author__))
 else:
     RFCDIG=ARGS.rfcdig
     DISPATCH_TABLE[ARGS.command](ARGS)
