@@ -72,7 +72,7 @@ class CFtpGetter(object):
         return  self.ftpc.size(fname)
 
 class CRfcDirectory(object):
-    """RFC directory parser anf file manipulator"""
+    """RFC directory parser, and file manipulator"""
     def __init__(self, rfc_root=None):
         self.rfc_root = rfc_root or "."
         self.num_ondisk = []
@@ -92,7 +92,7 @@ class CRfcDirectory(object):
         return int(self.num_ondisk[-1])
 
     def store_file(self, inum):
-        """store file from RFC root fir to proper subdirectory"""
+        """store file from RFC root fir to the proper subdirectory"""
         dirname = os.path.join(self.rfc_root, "rfc%0{}d".format(RFCDIG) % (inum - inum % 100))
         if not os.path.exists(dirname):
             print("Creating " + dirname)
@@ -179,9 +179,8 @@ class CRfcReference(object):
         """return maximum number of RFC present in index"""
         return int(self.nums_present[-1])
 
-
 def toss_received(arg, r_idx=None, r_dir=None):
-    """move just stored files to proper directories"""
+    """move just stored files to the proper directories"""
     rfcidx = r_idx or CRfcIndex("rfc-index.txt", arg.rfcdir)
     rfcdir = r_dir or CRfcDirectory(arg.rfcdir)
     if r_idx is None:
@@ -200,7 +199,7 @@ def toss_received(arg, r_idx=None, r_dir=None):
         del rfcidx
 
 def print_absent(arg):
-    """print list if absent RFC numbers"""
+    """print list of absent RFC numbers"""
     rfcidx = CRfcIndex("rfc-index.txt", arg.rfcdir)
     rfcref = CRfcReference("rfc-ref.txt", arg.rfcdir)
     rfcdir = CRfcDirectory(arg.rfcdir)
@@ -235,7 +234,7 @@ def print_absent(arg):
     del rfcref
 
 def create_notissued(rfcroot, num):
-    """create file of never issued RFC and write this note into it"""
+    """create file for never issued RFC, and write the 'never issued' note into it"""
     fname = os.path.join(rfcroot, "rfc{}.txt".format(num))
     text = "RFC {} was never issued.".format(num)
     lfd = open(fname, "w")
@@ -296,8 +295,9 @@ PARSER.add_argument('-u', '--user', default="ftp", help='set FTP user name')
 PARSER.add_argument('-p', '--password', default="ftp", help='set FTP password')
 PARSER.add_argument('-d', '--dir', default="in-notes", help='set FTP directory')
 PARSER.add_argument('-g', '--rfcdig', type=int, default=RFCDIG, help='count of digits in RFC number')
-PARSER.add_argument('command', choices=['absent', 'update', 'toss'], nargs='?',
-                    default='update', help='Update local RFC collection or print the absent RFC numbers')
+PARSER.add_argument('command', choices=['absent', 'update', 'toss'],
+                    nargs='?', default='update',
+                    help='Update local RFC collection or print the absent RFC numbers')
 ARGS = PARSER.parse_args()
 
 DISPATCH_TABLE = {
