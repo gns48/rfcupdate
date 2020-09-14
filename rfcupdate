@@ -108,8 +108,8 @@ class CRfcDirectory(object):
             received_name = os.path.join(self.rfc_root, rfc_name)
             if os.path.isfile(received_name):
                 os.rename(received_name, stored_name)
-                call(['gzip', stored_name])
-                print('{} -> {}.gz'.format(received_name, stored_name))
+                call(['xz', stored_name])
+                print('{} -> {}.xz'.format(received_name, stored_name))
 
     def getlist(self):
         """return list of rfc numbers present on disk"""
